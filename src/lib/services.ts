@@ -1,0 +1,321 @@
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { id22 } from "@/lib/id";
+
+type BusinessFilters = {
+  query?: string;
+  city?: string;
+  category?: string;
+  tag?: string;
+  openNow?: boolean;
+  minRating?: number;
+};
+
+export async function listBusinesses(filters: BusinessFilters) {
+  const where: Prisma.BusinessWhereInput = {};
+
+  if (filters.query) {
+    where.name = { contains: filters.query, mode: "insensitive" };
+  }
+
+  if (filters.city) {
+    where.city = { equals: filters.city, mode: "insensitive" };
+  }
+
+  if (filters.category) {
+    where.businessCategories = {
+      some: {
+        category: {
+          name: { equals: filters.category, mode: "insensitive" },
+        },
+      },
+    };
+  }
+
+  if (filters.tag) {
+    where.businessTags = {
+      some: {
+        tag: {
+          name: { equals: filters.tag, mode: "insensitive" },
+        },
+      },
+    };
+  }
+
+  if (filters.openNow) {
+    const now = new Date();
+    const weekday = (now.getDay() + 6) % 7;
+    const timeOnly = new Date(Date.UTC(1970, 0, 1, now.getHours(), now.getMinutes(), now.getSeconds()));
+
+    where.businessHours = {
+      some: {
+        weekday,
+        openingTime: { lte: timeOnly },
+        closingTime: { gte: timeOnly },
+      },
+    };
+  }
+
+  const raw = await prisma.business.findMany({
+    where,
+    include: {
+      businessCategories: { include: { category: true } },
+      businessTags: { include: { tag: true } },
+      feedbacks: {
+        select: {
+          rating: true,
+        },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const mapped = raw.map((business) => {
+    const ratings = business.feedbacks.map((f) => f.rating).filter((r): r is number => r != null);
+    const avgRating = ratings.length ? ratings.reduce((acc, n) => acc + n, 0) / ratings.length : null;
+
+    return {
+      id: business.id,
+      name: business.name,
+      street: business.street,
+      city: business.city,
+      state: business.state,
+      postalCode: business.postalCode,
+      avgRating,
+      ratingsCount: ratings.length,
+      categories: business.businessCategories.map((row) => row.category.name),
+      tags: business.businessTags.map((row) => row.tag.name),
+    };
+  });
+
+  if (filters.minRating == null) return mapped;
+  return mapped.filter((business) => (business.avgRating ?? 0) >= filters.minRating!);
+}
+
+export async function getBusinessById(id: string) {
+  const business = await prisma.business.findUnique({
+    where: { id },
+    include: {
+      businessCategories: { include: { category: true } },
+      businessTags: { include: { tag: true } },
+      businessHours: { orderBy: [{ weekday: "asc" }, { openingTime: "asc" }] },
+      photos: {
+        take: 20,
+        select: {
+          id: true,
+          description: true,
+          label: { select: { name: true } },
+        },
+      },
+      checkins: {
+        take: 50,
+        orderBy: { timestamp: "desc" },
+        select: { id: true, timestamp: true },
+      },
+      feedbacks: {
+        select: {
+          rating: true,
+        },
+      },
+    },
+  });
+
+  if (!business) return null;
+
+  const ratings = business.feedbacks.map((f) => f.rating).filter((r): r is number => r != null);
+  const avgRating = ratings.length ? ratings.reduce((acc, n) => acc + n, 0) / ratings.length : null;
+
+  return {
+    ...business,
+    avgRating,
+    ratingsCount: ratings.length,
+  };
+}
+
+export async function getBusinessFeed(businessId: string, skip: number, take: number) {
+  return prisma.feedback.findMany({
+    where: { businessId },
+    orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+    skip,
+    take,
+    include: {
+      user: { select: { id: true, name: true } },
+      reactions: {
+        include: { reactionType: true },
+      },
+    },
+  });
+}
+
+export async function createFeedback(input: {
+  type: "review" | "tip";
+  businessId: string;
+  text: string;
+  rating?: number | null;
+  userId: string;
+}) {
+  return prisma.feedback.create({
+    data: {
+      id: id22(),
+      type: input.type,
+      businessId: input.businessId,
+      userId: input.userId,
+      text: input.text,
+      rating: input.type === "tip" ? null : input.rating ?? null,
+    },
+  });
+}
+
+export async function upsertReaction(input: {
+  feedbackId: string;
+  reactionTypeId: string;
+  userId: string;
+}) {
+  return prisma.reaction.upsert({
+    where: {
+      userId_feedbackId: {
+        userId: input.userId,
+        feedbackId: input.feedbackId,
+      },
+    },
+    create: {
+      id: id22(),
+      userId: input.userId,
+      feedbackId: input.feedbackId,
+      reactionTypeId: input.reactionTypeId,
+    },
+    update: {
+      reactionTypeId: input.reactionTypeId,
+    },
+  });
+}
+
+export async function getUserProfile(username: string) {
+  return prisma.user.findFirst({
+    where: {
+      name: { equals: username, mode: "insensitive" },
+    },
+    include: {
+      feedbacks: {
+        orderBy: { timestamp: "desc" },
+        take: 20,
+        include: { business: true },
+      },
+    },
+  });
+}
+
+export async function sendFriendRequest(fromUserId: string, toUserId: string) {
+  return prisma.friendship.upsert({
+    where: {
+      requesterId_addresseeId: {
+        requesterId: fromUserId,
+        addresseeId: toUserId,
+      },
+    },
+    create: {
+      requesterId: fromUserId,
+      addresseeId: toUserId,
+      status: "pending",
+    },
+    update: {
+      status: "pending",
+      respondedAt: null,
+    },
+  });
+}
+
+export async function respondToFriendRequest(params: {
+  requestId: string;
+  action: "accept" | "reject";
+  currentUserId: string;
+}) {
+  const request = await prisma.friendship.findUnique({ where: { id: params.requestId } });
+
+  if (!request || request.addresseeId !== params.currentUserId) {
+    throw new Error("NOT_FOUND");
+  }
+
+  return prisma.friendship.update({
+    where: { id: params.requestId },
+    data: {
+      status: params.action === "accept" ? "accepted" : "rejected",
+      respondedAt: new Date(),
+    },
+  });
+}
+
+export async function listAcceptedFriends(userId: string) {
+  const relations = await prisma.friendship.findMany({
+    where: {
+      status: "accepted",
+      OR: [{ requesterId: userId }, { addresseeId: userId }],
+    },
+    include: {
+      requester: { select: { id: true, name: true } },
+      addressee: { select: { id: true, name: true } },
+    },
+  });
+
+  return relations.map((row) =>
+    row.requesterId === userId ? row.addressee : row.requester,
+  );
+}
+
+export async function listPendingFriendships(userId: string) {
+  const [incoming, outgoing] = await Promise.all([
+    prisma.friendship.findMany({
+      where: {
+        status: "pending",
+        addresseeId: userId,
+      },
+      include: {
+        requester: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.friendship.findMany({
+      where: {
+        status: "pending",
+        requesterId: userId,
+      },
+      include: {
+        addressee: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  return { incoming, outgoing };
+}
+
+export async function getFriendFeed(userId: string, skip: number, take: number) {
+  const accepted = await prisma.friendship.findMany({
+    where: {
+      status: "accepted",
+      OR: [{ requesterId: userId }, { addresseeId: userId }],
+    },
+    select: {
+      requesterId: true,
+      addresseeId: true,
+    },
+  });
+
+  const friendIds = accepted.map((r) => (r.requesterId === userId ? r.addresseeId : r.requesterId));
+
+  if (!friendIds.length) return [];
+
+  return prisma.feedback.findMany({
+    where: {
+      userId: { in: friendIds },
+    },
+    include: {
+      user: { select: { id: true, name: true } },
+      business: { select: { id: true, name: true, city: true, state: true } },
+      reactions: { include: { reactionType: true } },
+    },
+    orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+    skip,
+    take,
+  });
+}
