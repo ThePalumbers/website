@@ -1,7 +1,7 @@
 import { Clock3, ImageIcon, MapPin, MessageSquare, SmilePlus, UserCheck } from "lucide-react";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
 import { getBusinessById, getBusinessFeed } from "@/lib/services";
+import { prisma } from "@/lib/db";
 import { Tabs } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { FeedbackCard } from "@/components/feedback/FeedbackCard";
 import { getSessionUser } from "@/lib/auth";
 import { EmptyState } from "@/components/common/EmptyState";
 import { SectionHeader } from "@/components/common/SectionHeader";
+import { getQuickReactionTypes } from "@/lib/quick-reactions";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -23,7 +24,24 @@ export default async function BusinessPage({ params }: Props) {
 
   const feedbacks = await getBusinessFeed(id, 0, 20);
   const user = await getSessionUser();
-  const reactionTypes = await prisma.reactionType.findMany({ orderBy: { name: "asc" } });
+  const reactionTypes = await getQuickReactionTypes();
+  const myReview = user
+    ? await prisma.feedback.findFirst({
+        where: {
+          userId: user.id,
+          businessId: id,
+          type: "review",
+        },
+        select: {
+          id: true,
+          userId: true,
+          businessId: true,
+          type: true,
+          text: true,
+          rating: true,
+        },
+      })
+    : null;
 
   const tabs = [
     {
@@ -31,9 +49,21 @@ export default async function BusinessPage({ params }: Props) {
       label: `Feedback (${feedbacks.length})`,
       content: (
         <div className="space-y-3">
-          {user ? <FeedbackForm businessId={id} /> : <p className="text-sm text-muted-foreground">Login to write feedback.</p>}
+          {user ? (
+            <FeedbackForm businessId={id} currentUserId={user.id} existingReview={myReview} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Login to write feedback.</p>
+          )}
           {feedbacks.length ? (
-            feedbacks.map((feedback) => <FeedbackCard key={feedback.id} feedback={feedback} />)
+            feedbacks.map((feedback) => (
+              <FeedbackCard
+                key={feedback.id}
+                feedback={feedback}
+                quickReactionTypes={reactionTypes}
+                currentUserId={user?.id ?? null}
+                authorUserId={feedback.userId}
+              />
+            ))
           ) : (
             <EmptyState
               icon={MessageSquare}
@@ -104,7 +134,7 @@ export default async function BusinessPage({ params }: Props) {
           {reactionTypes.map((type) => (
             <Badge key={type.id} className="text-xs">
               <SmilePlus className="mr-1 h-3 w-3" />
-              {type.name}
+              {type.key}
             </Badge>
           ))}
         </div>

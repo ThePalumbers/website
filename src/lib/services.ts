@@ -270,6 +270,7 @@ export async function getBusinessFeed(businessId: string, skip: number, take: nu
       reactions: {
         select: {
           id: true,
+          userId: true,
           reactionType: { select: { id: true, name: true } },
         },
       },
@@ -327,11 +328,30 @@ export async function getUserProfile(username: string) {
     where: {
       name: { equals: username, mode: "insensitive" },
     },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      registrationDate: true,
       feedbacks: {
         orderBy: { timestamp: "desc" },
         take: 20,
-        include: { business: true },
+        select: {
+          id: true,
+          type: true,
+          userId: true,
+          businessId: true,
+          rating: true,
+          text: true,
+          timestamp: true,
+          business: { select: { id: true, name: true } },
+          reactions: {
+            select: {
+              id: true,
+              userId: true,
+              reactionType: { select: { id: true, name: true } },
+            },
+          },
+        },
       },
     },
   });
@@ -455,6 +475,7 @@ export async function getFriendFeed(userId: string, skip: number, take: number) 
       reactions: {
         select: {
           id: true,
+          userId: true,
           reactionType: { select: { id: true, name: true } },
         },
       },

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -41,21 +41,30 @@ export function HeaderNav({ username }: { username?: string }) {
 
       {username ? (
         <>
-          <Link
-            draggable={false}
-            className={cn(
-              "px-2.5 py-2 transition-colors",
-              pathname.startsWith("/u/")
-                ? "text-brand underline underline-offset-4 decoration-brand/70"
-                : "text-muted-foreground hover:text-brand/60",
-            )}
-            href={`/u/${encodeURIComponent(username)}`}
-          >
-            Profile
+          <Link href={`/u/${encodeURIComponent(username)}`} aria-label="Profile" title="Profile" draggable={false}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={cn(
+                "h-8 w-8 px-0",
+                pathname.startsWith("/u/") ? "text-brand" : "text-muted-foreground hover:text-brand/60",
+              )}
+            >
+              <User className="h-4 w-4" />
+              <span className="sr-only">Profile</span>
+            </Button>
           </Link>
           <form action="/api/auth/logout" method="post">
-            <Button size="sm" variant="outline" type="submit">
-              Logout
+            <Button
+              size="sm"
+              variant="ghost"
+              type="submit"
+              aria-label="Logout"
+              title="Logout"
+              className="h-8 w-8 px-0 text-muted-foreground hover:text-brand/60"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="sr-only">Logout</span>
             </Button>
           </form>
         </>

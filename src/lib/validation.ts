@@ -30,6 +30,15 @@ export const reactionPayloadSchema = z.object({
   reactionTypeId: z.string().length(22),
 });
 
+export const feedbackUpdatePayloadSchema = z
+  .object({
+    text: z.string().trim().min(1).max(5000).optional(),
+    rating: z.number().int().min(1).max(5).nullable().optional(),
+  })
+  .refine((data) => data.text !== undefined || data.rating !== undefined, {
+    message: "Provide at least one field to update.",
+  });
+
 export const friendshipRequestSchema = z.object({
   toUserId: z.string().length(22),
 });

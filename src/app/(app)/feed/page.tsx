@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { FeedbackCard } from "@/components/feedback/FeedbackCard";
+import { getQuickReactionTypes } from "@/lib/quick-reactions";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -21,7 +22,7 @@ export default async function FeedPage({ searchParams }: Props) {
   const pageRaw = typeof params.page === "string" ? params.page : "1";
   const limitRaw = typeof params.limit === "string" ? params.limit : "20";
   const { page, limit, skip } = parsePageLimit(pageRaw, limitRaw, 20);
-  const items = await getFriendFeed(user.id, skip, limit);
+  const [items, quickReactionTypes] = await Promise.all([getFriendFeed(user.id, skip, limit), getQuickReactionTypes()]);
 
   return (
     <div className="space-y-5">
@@ -37,6 +38,9 @@ export default async function FeedPage({ searchParams }: Props) {
                 reactions: item.reactions,
                 user: item.user,
               }}
+              quickReactionTypes={quickReactionTypes}
+              currentUserId={user.id}
+              authorUserId={item.userId}
             />
           ))
         ) : (

@@ -121,6 +121,26 @@ async function ensureReactionTypes() {
   }
 }
 
+async function ensureQuickReactionTypes() {
+  const required = ["useful", "funny", "cool"];
+
+  for (const name of required) {
+    const existing = await prisma.reactionType.findFirst({
+      where: { name: { equals: name, mode: "insensitive" } },
+      select: { id: true },
+    });
+
+    if (existing) continue;
+
+    await prisma.reactionType.create({
+      data: {
+        id: id22(`seed-reaction-type-core-${name}`),
+        name,
+      },
+    });
+  }
+}
+
 async function ensureLabels() {
   let count = await prisma.label.count();
 
@@ -447,6 +467,7 @@ async function main() {
   await ensureCategories();
   await ensureTags();
   await ensureReactionTypes();
+  await ensureQuickReactionTypes();
   await ensureLabels();
 
   const [users, businesses, categories, tags, reactionTypes, labels] = await Promise.all([
