@@ -325,4 +325,4 @@ Then rerun migration/seed if needed.
 
 ## 📄 License
 
-MIT (placeholder)
+© 2026 ThePalumbers. All rights reserved.
