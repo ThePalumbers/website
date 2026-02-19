@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { HeaderNav } from "@/components/layout/HeaderNav";
 import { SearchCommand } from "@/components/layout/SearchCommand";
+import { HeaderCenterLabel } from "@/components/layout/HeaderCenterLabel";
 
 export async function Header() {
   const user = await getSessionUser();
@@ -22,9 +23,7 @@ export async function Header() {
               <BrandLogo isLoggedIn={isLoggedIn} size={84} />
             </Link>
             {isLoggedIn ? (
-              <div className="mt-1 hidden whitespace-nowrap text-sm text-foreground/80 leading-tight sm:block">
-                Hi, <b>{user?.name}</b>. Welcome to <b>Palumbers</b>.
-              </div>
+              <HeaderCenterLabel username={user?.name} />
             ) : null}
           </div>
 
