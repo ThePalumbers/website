@@ -164,7 +164,7 @@ Notes:
 If remote PostgreSQL listens only on `127.0.0.1`:
 
 ```bash
-ssh -N -L 15432:127.0.0.1:5432 user@10.0.138.9
+ssh -N -L 15432:127.0.0.1:5432 user@PalumbersHost
 ```
 
 Then point `DATABASE_URL` to `localhost:15432`.
