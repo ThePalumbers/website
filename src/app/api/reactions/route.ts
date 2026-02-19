@@ -5,6 +5,7 @@ import { requireSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { normalizeReactionName, type QuickReactionKey } from "@/lib/quick-reactions";
 import { publishReactionEvent } from "@/lib/reactions-realtime";
+import { pushNotification } from "@/lib/notifications-store";
 
 export const runtime = "nodejs";
 
@@ -88,6 +89,18 @@ export async function POST(request: Request) {
     };
 
     publishReactionEvent(eventPayload);
+
+    if (feedback.userId !== user.id) {
+      pushNotification(feedback.userId, {
+        type: "reaction",
+        title: "New reaction",
+        body: `${user.name ?? "Someone"} reacted to your feedback`,
+        href: `/feedback/${payload.feedbackId}`,
+        actorUserId: user.id,
+        entityId: payload.feedbackId,
+      });
+    }
+
     return ok({ status: "upserted", myReactionTypeId: reaction.reactionTypeId }, { status: 201 });
   } catch (error) {
     return handleApiError(error);

@@ -2,6 +2,7 @@ import { requireSessionUser } from "@/lib/auth";
 import { friendshipRespondSchema } from "@/lib/validation";
 import { respondToFriendRequest } from "@/lib/services";
 import { ok, handleApiError, fail } from "@/lib/http";
+import { pushNotification } from "@/lib/notifications-store";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,17 @@ export async function POST(request: Request) {
       action: payload.action,
       currentUserId: user.id,
     });
+
+    if (payload.action === "accept") {
+      pushNotification(result.requesterId, {
+        type: "friend_accept",
+        title: "Friend request accepted",
+        body: `${user.name ?? "Someone"} accepted your friend request`,
+        href: user.name ? `/u/${encodeURIComponent(user.name)}` : "/friends",
+        actorUserId: user.id,
+        entityId: result.id,
+      });
+    }
 
     return ok(result);
   } catch (error) {

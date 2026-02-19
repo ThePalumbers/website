@@ -29,7 +29,7 @@ export async function Header() {
           </div>
 
           <div className="col-start-3 row-start-1 row-span-2 flex items-center justify-self-end px-2.5">
-            <HeaderNav username={user?.name} />
+            <HeaderNav username={user?.name} isLoggedIn={isLoggedIn} />
           </div>
         </div>
       </div>

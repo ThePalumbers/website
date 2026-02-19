@@ -48,6 +48,10 @@ export const friendshipRespondSchema = z.object({
   action: z.enum(["accept", "reject"]),
 });
 
+export const notificationMarkReadSchema = z.object({
+  id: z.string().uuid(),
+});
+
 export const signupSchema = z.object({
   name: z.string().trim().min(2).max(32),
   email: z.string().email(),

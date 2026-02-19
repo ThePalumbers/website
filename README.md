@@ -14,6 +14,7 @@ The homepage (`/`) is a splash screen, and clicking the splash image navigates t
 - 👍 Reactions on feedback with one reaction per user per feedback
 - 🤝 Friendship workflow (`pending`, `accepted`, `rejected`)
 - 📰 Social feed based on accepted friendships
+- 🔔 Real-time notifications (SSE, in-memory per server instance)
 - User profile page by username
 - 🔐 Credentials auth with cookie-based sessions
 - Dev-only internal tools at `/devtools`:
@@ -221,6 +222,15 @@ Base URL: `http://localhost:3000`
 ### Users
 
 - `GET /api/users/[username]`
+
+### Notifications
+
+- `GET /api/notifications?limit=20`
+- `POST /api/notifications/mark-read`
+- `POST /api/notifications/mark-all-read`
+- `GET /api/realtime/notifications` (SSE)
+
+Note: notifications are in-memory only and reset when the server restarts. Persisted notifications require a dedicated DB table.
 
 ### 🛠️ Devtools APIs (development only)
 
