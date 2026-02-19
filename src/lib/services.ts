@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { id22 } from "@/lib/id";
+import { logQueryPayload } from "@/lib/debug/memory";
 
 type BusinessFilters = {
   query?: string;
@@ -11,7 +12,7 @@ type BusinessFilters = {
   minRating?: number;
 };
 
-export async function listBusinesses(filters: BusinessFilters) {
+function buildBusinessWhere(filters: BusinessFilters): Prisma.BusinessWhereInput {
   const where: Prisma.BusinessWhereInput = {};
 
   if (filters.query) {
@@ -56,40 +57,154 @@ export async function listBusinesses(filters: BusinessFilters) {
     };
   }
 
-  const raw = await prisma.business.findMany({
-    where,
-    include: {
-      businessCategories: { include: { category: true } },
-      businessTags: { include: { tag: true } },
-      feedbacks: {
-        select: {
-          rating: true,
-        },
-      },
-    },
-    orderBy: { name: "asc" },
-  });
+  return where;
+}
 
-  const mapped = raw.map((business) => {
-    const ratings = business.feedbacks.map((f) => f.rating).filter((r): r is number => r != null);
-    const avgRating = ratings.length ? ratings.reduce((acc, n) => acc + n, 0) / ratings.length : null;
+type BusinessListItem = {
+  id: string;
+  name: string;
+  street: string | null;
+  city: string;
+  state: string;
+  postalCode: string | null;
+  avgRating: number | null;
+  ratingsCount: number;
+  categories: string[];
+  tags: string[];
+};
+
+export async function listBusinessesPage(filters: BusinessFilters, page: number, take: number) {
+  const safeTake = Math.min(take, 50);
+  const skip = (Math.max(1, page) - 1) * safeTake;
+  const where = buildBusinessWhere(filters);
+
+  const mapItems = (
+    rows: Array<{
+      id: string;
+      name: string;
+      street: string | null;
+      city: string;
+      state: string;
+      postalCode: string | null;
+      businessCategories: Array<{ category: { name: string } }>;
+      businessTags: Array<{ tag: { name: string } }>;
+    }>,
+    ratingsMap: Map<string, { avg: number | null; count: number }>,
+  ): BusinessListItem[] =>
+    rows.map((business) => {
+      const rating = ratingsMap.get(business.id);
+      return {
+        id: business.id,
+        name: business.name,
+        street: business.street,
+        city: business.city,
+        state: business.state,
+        postalCode: business.postalCode,
+        avgRating: rating?.avg ?? null,
+        ratingsCount: rating?.count ?? 0,
+        categories: business.businessCategories.map((row) => row.category.name),
+        tags: business.businessTags.map((row) => row.tag.name),
+      };
+    });
+
+  if (filters.minRating == null) {
+    const [total, rows] = await prisma.$transaction([
+      prisma.business.count({ where }),
+      prisma.business.findMany({
+        where,
+        skip,
+        take: safeTake,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          street: true,
+          city: true,
+          state: true,
+          postalCode: true,
+          businessCategories: { select: { category: { select: { name: true } } } },
+          businessTags: { select: { tag: { select: { name: true } } } },
+        },
+      }),
+    ]);
+
+    const ids = rows.map((r) => r.id);
+    const ratingAgg = ids.length
+      ? await prisma.feedback.groupBy({
+          by: ["businessId"],
+          where: { businessId: { in: ids }, rating: { not: null } },
+          _avg: { rating: true },
+          _count: { _all: true },
+        })
+      : [];
+
+    const ratingsMap = new Map(
+      ratingAgg.map((r) => [r.businessId, { avg: r._avg.rating ?? null, count: r._count._all }]),
+    );
+
+    const items = mapItems(rows, ratingsMap);
+    logQueryPayload("businesses.list.page", items, items.length);
 
     return {
-      id: business.id,
-      name: business.name,
-      street: business.street,
-      city: business.city,
-      state: business.state,
-      postalCode: business.postalCode,
-      avgRating,
-      ratingsCount: ratings.length,
-      categories: business.businessCategories.map((row) => row.category.name),
-      tags: business.businessTags.map((row) => row.tag.name),
+      items,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / safeTake)),
+      page: Math.max(1, page),
+      limit: safeTake,
     };
-  });
+  }
 
-  if (filters.minRating == null) return mapped;
-  return mapped.filter((business) => (business.avgRating ?? 0) >= filters.minRating!);
+  const idRows = await prisma.business.findMany({
+    where,
+    orderBy: { name: "asc" },
+    select: { id: true },
+  });
+  const allIds = idRows.map((row) => row.id);
+
+  const allRatings = allIds.length
+    ? await prisma.feedback.groupBy({
+        by: ["businessId"],
+        where: { businessId: { in: allIds }, rating: { not: null } },
+        _avg: { rating: true },
+        _count: { _all: true },
+      })
+    : [];
+  const ratingsMapAll = new Map(
+    allRatings.map((r) => [r.businessId, { avg: r._avg.rating ?? null, count: r._count._all }]),
+  );
+
+  const filteredIds = allIds.filter((id) => (ratingsMapAll.get(id)?.avg ?? 0) >= filters.minRating!);
+  const total = filteredIds.length;
+  const pageIds = filteredIds.slice(skip, skip + safeTake);
+  const pageOrder = new Map(pageIds.map((id, index) => [id, index]));
+
+  const rows = pageIds.length
+    ? await prisma.business.findMany({
+        where: { id: { in: pageIds } },
+        select: {
+          id: true,
+          name: true,
+          street: true,
+          city: true,
+          state: true,
+          postalCode: true,
+          businessCategories: { select: { category: { select: { name: true } } } },
+          businessTags: { select: { tag: { select: { name: true } } } },
+        },
+      })
+    : [];
+
+  rows.sort((a, b) => (pageOrder.get(a.id) ?? 0) - (pageOrder.get(b.id) ?? 0));
+  const items = mapItems(rows, ratingsMapAll);
+  logQueryPayload("businesses.list.page.minRating", items, items.length);
+
+  return {
+    items,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / safeTake)),
+    page: Math.max(1, page),
+    limit: safeTake,
+  };
 }
 
 export async function getBusinessById(id: string) {
@@ -112,39 +227,56 @@ export async function getBusinessById(id: string) {
         orderBy: { timestamp: "desc" },
         select: { id: true, timestamp: true },
       },
-      feedbacks: {
-        select: {
-          rating: true,
-        },
-      },
     },
   });
 
   if (!business) return null;
 
-  const ratings = business.feedbacks.map((f) => f.rating).filter((r): r is number => r != null);
-  const avgRating = ratings.length ? ratings.reduce((acc, n) => acc + n, 0) / ratings.length : null;
+  const ratings = await prisma.feedback.aggregate({
+    where: { businessId: id, rating: { not: null } },
+    _avg: { rating: true },
+    _count: { _all: true },
+  });
 
-  return {
+  const avgRating = ratings._avg.rating ?? null;
+  const ratingsCount = ratings._count._all;
+
+  const result = {
     ...business,
     avgRating,
-    ratingsCount: ratings.length,
+    ratingsCount,
   };
+  logQueryPayload("business.byId", result, 1);
+
+  return result;
 }
 
 export async function getBusinessFeed(businessId: string, skip: number, take: number) {
-  return prisma.feedback.findMany({
+  const safeTake = Math.min(Math.max(1, take), 50);
+  const items = await prisma.feedback.findMany({
     where: { businessId },
     orderBy: [{ timestamp: "desc" }, { id: "desc" }],
     skip,
-    take,
-    include: {
+    take: safeTake,
+    select: {
+      id: true,
+      type: true,
+      userId: true,
+      businessId: true,
+      rating: true,
+      text: true,
+      timestamp: true,
       user: { select: { id: true, name: true } },
       reactions: {
-        include: { reactionType: true },
+        select: {
+          id: true,
+          reactionType: { select: { id: true, name: true } },
+        },
       },
     },
   });
+  logQueryPayload("business.feed", items, items.length);
+  return items;
 }
 
 export async function createFeedback(input: {
@@ -290,6 +422,7 @@ export async function listPendingFriendships(userId: string) {
 }
 
 export async function getFriendFeed(userId: string, skip: number, take: number) {
+  const safeTake = Math.min(Math.max(1, take), 50);
   const accepted = await prisma.friendship.findMany({
     where: {
       status: "accepted",
@@ -305,17 +438,31 @@ export async function getFriendFeed(userId: string, skip: number, take: number) 
 
   if (!friendIds.length) return [];
 
-  return prisma.feedback.findMany({
+  const items = await prisma.feedback.findMany({
     where: {
       userId: { in: friendIds },
     },
-    include: {
+    select: {
+      id: true,
+      type: true,
+      userId: true,
+      businessId: true,
+      rating: true,
+      text: true,
+      timestamp: true,
       user: { select: { id: true, name: true } },
       business: { select: { id: true, name: true, city: true, state: true } },
-      reactions: { include: { reactionType: true } },
+      reactions: {
+        select: {
+          id: true,
+          reactionType: { select: { id: true, name: true } },
+        },
+      },
     },
     orderBy: [{ timestamp: "desc" }, { id: "desc" }],
     skip,
-    take,
+    take: safeTake,
   });
+  logQueryPayload("friend.feed", items, items.length);
+  return items;
 }

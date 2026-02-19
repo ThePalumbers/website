@@ -1,4 +1,4 @@
-import { listBusinesses } from "@/lib/services";
+import { listBusinessesPage } from "@/lib/services";
 import { ok, handleApiError } from "@/lib/http";
 import { parsePageLimit } from "@/lib/utils";
 
@@ -9,22 +9,24 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const { page, limit } = parsePageLimit(searchParams.get("page"), searchParams.get("limit"));
 
-    const results = await listBusinesses({
-      query: searchParams.get("query") ?? undefined,
-      city: searchParams.get("city") ?? undefined,
-      category: searchParams.get("category") ?? undefined,
-      tag: searchParams.get("tag") ?? undefined,
-      openNow: searchParams.get("openNow") === "true",
-      minRating: searchParams.get("minRating") ? Number(searchParams.get("minRating")) : undefined,
-    });
-
-    const start = (page - 1) * limit;
-    return ok({
-      items: results.slice(start, start + limit),
+    const result = await listBusinessesPage(
+      {
+        query: searchParams.get("query") ?? undefined,
+        city: searchParams.get("city") ?? undefined,
+        category: searchParams.get("category") ?? undefined,
+        tag: searchParams.get("tag") ?? undefined,
+        openNow: searchParams.get("openNow") === "true",
+        minRating: searchParams.get("minRating") ? Number(searchParams.get("minRating")) : undefined,
+      },
       page,
       limit,
-      total: results.length,
-      totalPages: Math.max(1, Math.ceil(results.length / limit)),
+    );
+    return ok({
+      items: result.items,
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
+      totalPages: result.totalPages,
     });
   } catch (error) {
     return handleApiError(error);

@@ -10,6 +10,9 @@ import { FeedbackCard } from "@/components/feedback/FeedbackCard";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function FeedPage({ searchParams }: Props) {
   const user = await getSessionUser();
   if (!user) redirect("/auth/login");

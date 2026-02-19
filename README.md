@@ -112,6 +112,7 @@ AUTH_SECRET="replace-with-a-long-random-secret"
 DEVTOOLS_TOKEN="changeme_dev"
 DEVTOOLS_SQL_ENABLED="0"
 DEVTOOLS_SQL_WRITE_ENABLED="0"
+MEM_DEBUG="0"
 ```
 
 Variable meanings:
@@ -121,6 +122,7 @@ Variable meanings:
 - `DEVTOOLS_TOKEN`: unlock token for `/devtools`
 - `DEVTOOLS_SQL_ENABLED`: enables SQL Console (`1`/`0`)
 - `DEVTOOLS_SQL_WRITE_ENABLED`: enables SQL write mode (`1`/`0`)
+- `MEM_DEBUG`: enables server memory/debug logs every 10s (`1`/`0`)
 
 ## 🗄️ Database Setup
 
@@ -299,7 +301,7 @@ Security notes:
 
 ## 🧯 Troubleshooting
 
-### 1) `allowedDevOrigins` warning on `http://10.0.138.9:3000`
+### 1) `allowedDevOrigins` warning on `http://someLAN-IP:3000`
 
 If you run the dev server via IP/host instead of localhost, make sure your dev origin/host configuration and browser URL are aligned.
 
@@ -316,6 +318,31 @@ npm run db:generate
 ```
 
 Then rerun migration/seed if needed.
+
+### 4) Debug memory (dev-only) (`MEM_DEBUG=1`)
+
+Run with memory instrumentation enabled:
+
+```bash
+MEM_DEBUG=1 npm run dev
+```
+
+```bash
+MEM_DEBUG=1 npm run build
+MEM_DEBUG=1 npm run start
+```
+
+Or set MEM_DEBUG=1 in your .env file.
+
+You will see periodic logs with `rss`, `heapUsed`, `heapTotal`, `external`, and active timer/handle counters.
+
+Quick checks:
+
+```bash
+ps -o pid,rss,command -C node
+```
+
+In browser DevTools, check the Network tab for repeated/looping requests while idle.
 
 ## 🗺️ Roadmap
 

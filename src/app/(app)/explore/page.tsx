@@ -1,5 +1,5 @@
 import { Building2 } from "lucide-react";
-import { listBusinesses } from "@/lib/services";
+import { listBusinessesPage } from "@/lib/services";
 import { parsePageLimit } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,9 @@ type SearchProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function getParam(params: Record<string, string | string[] | undefined>, key: string) {
   const value = params[key];
   return Array.isArray(value) ? value[0] : value;
@@ -24,18 +27,18 @@ export default async function ExplorePage({ searchParams }: SearchProps) {
   const limitRaw = getParam(params, "limit") ?? "12";
   const { page, limit } = parsePageLimit(pageRaw, limitRaw, 12);
 
-  const items = await listBusinesses({
-    query: getParam(params, "query"),
-    city: getParam(params, "city"),
-    category: getParam(params, "category"),
-    tag: getParam(params, "tag"),
-    openNow: getParam(params, "openNow") === "true",
-    minRating: getParam(params, "minRating") ? Number(getParam(params, "minRating")) : undefined,
-  });
-
-  const start = (page - 1) * limit;
-  const paged = items.slice(start, start + limit);
-  const totalPages = Math.max(1, Math.ceil(items.length / limit));
+  const result = await listBusinessesPage(
+    {
+      query: getParam(params, "query"),
+      city: getParam(params, "city"),
+      category: getParam(params, "category"),
+      tag: getParam(params, "tag"),
+      openNow: getParam(params, "openNow") === "true",
+      minRating: getParam(params, "minRating") ? Number(getParam(params, "minRating")) : undefined,
+    },
+    page,
+    limit,
+  );
 
   const query = Object.fromEntries(
     Object.entries(params).flatMap(([k, v]) => (typeof v === "string" && k !== "page" && k !== "limit" ? [[k, v]] : [])),
@@ -57,7 +60,7 @@ export default async function ExplorePage({ searchParams }: SearchProps) {
       </Card>
 
       <section className="space-y-3">
-        {paged.length === 0 ? (
+        {result.items.length === 0 ? (
           <EmptyState
             icon={Building2}
             title="No businesses found"
@@ -66,11 +69,11 @@ export default async function ExplorePage({ searchParams }: SearchProps) {
             ctaHref="/explore"
           />
         ) : (
-          paged.map((business) => <BusinessCard key={business.id} business={business} />)
+          result.items.map((business) => <BusinessCard key={business.id} business={business} />)
         )}
       </section>
 
-      <Pagination basePath="/explore" page={page} totalPages={totalPages} limit={limit} query={query} />
+      <Pagination basePath="/explore" page={result.page} totalPages={result.totalPages} limit={result.limit} query={query} />
     </div>
   );
 }

@@ -13,6 +13,9 @@ import { SectionHeader } from "@/components/common/SectionHeader";
 
 type Props = { params: Promise<{ id: string }> };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function BusinessPage({ params }: Props) {
   const { id } = await params;
   const business = await getBusinessById(id);

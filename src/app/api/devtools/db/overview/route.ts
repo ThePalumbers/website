@@ -22,7 +22,7 @@ export async function GET() {
           by: ["businessId"],
           where: { rating: { not: null } },
           _avg: { rating: true },
-          _count: { _all: true },
+          _count: true,
           orderBy: { _avg: { rating: "desc" } },
           take: 5,
         }),
@@ -61,8 +61,8 @@ export async function GET() {
           name: business.name,
           city: business.city,
           state: business.state,
-          avgRating: item._avg.rating,
-          feedbackCount: item._count._all,
+          avgRating: item._avg?.rating ?? 0,
+          feedbackCount: typeof item._count === 'object' ? item._count._all ?? 0 : 0,
         };
       })
       .filter(
@@ -71,7 +71,7 @@ export async function GET() {
           name: string;
           city: string;
           state: string;
-          avgRating: number | null;
+          avgRating: number;
           feedbackCount: number;
         } => item !== null,
       );
