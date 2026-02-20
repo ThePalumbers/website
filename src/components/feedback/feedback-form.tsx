@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import * as Tabs from "@radix-ui/react-tabs";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { StarRating } from "@/components/feedback/StarRating";
 import { FeedbackActions } from "@/components/feedback/FeedbackActions";
+import { cn } from "@/lib/utils";
 
 type ExistingReview = {
   id: string;
@@ -76,35 +79,53 @@ export function FeedbackForm({
   return (
     <form onSubmit={onSubmit} className="space-y-3 rounded-lg border bg-card p-4 shadow-sm">
       <h3 className="text-sm font-medium">Write feedback</h3>
-      <div className="flex items-center gap-4 text-sm">
-        <label className="inline-flex items-center gap-2 text-muted-foreground">
-          <input
-            checked={type === "review"}
-            onChange={() => {
-              if (hasMyReview) return;
-              setType("review");
-              setRatingError(null);
-            }}
-            type="radio"
-            name="type"
+      <Tabs.Root
+        value={type}
+        onValueChange={(value) => {
+          const next = value === "tip" ? "tip" : "review";
+          if (next === "review" && hasMyReview) return;
+          setType(next);
+          setRatingError(null);
+          if (next === "tip") {
+            setRating(null);
+          }
+        }}
+      >
+        <Tabs.List
+          className={cn(
+            "relative inline-grid h-10 w-52 grid-cols-2 items-center rounded-full border bg-background/40 p-1 shadow-sm backdrop-blur",
+          )}
+          aria-label="Feedback type"
+        >
+          <motion.div
+            aria-hidden
+            className="absolute bottom-1 top-1 left-1 rounded-full bg-foreground/10"
+            style={{ width: "calc(50% - 4px)" }}
+            animate={{ x: type === "review" ? 0 : "100%" }}
+            transition={{ type: "spring", stiffness: 500, damping: 40 }}
+          />
+          <Tabs.Trigger
+            value="review"
             disabled={hasMyReview}
-          />{" "}
-          <span className={hasMyReview ? "opacity-60" : undefined}>Review</span>
-        </label>
-        <label className="inline-flex items-center gap-2 text-muted-foreground">
-          <input
-            checked={type === "tip"}
-            onChange={() => {
-              setType("tip");
-              setRating(null);
-              setRatingError(null);
-            }}
-            type="radio"
-            name="type"
-          />{" "}
-          Tip
-        </label>
-      </div>
+            className={cn(
+              "relative z-10 rounded-full px-4 text-sm outline-none transition-colors",
+              "text-foreground/70 data-[state=active]:text-foreground",
+              "disabled:cursor-not-allowed disabled:opacity-60",
+            )}
+          >
+            Review
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="tip"
+            className={cn(
+              "relative z-10 rounded-full px-4 text-sm outline-none transition-colors",
+              "text-foreground/70 data-[state=active]:text-foreground",
+            )}
+          >
+            Tip
+          </Tabs.Trigger>
+        </Tabs.List>
+      </Tabs.Root>
 
       {hasMyReview ? (
         <div className="flex items-center gap-2">
